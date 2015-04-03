@@ -68,6 +68,10 @@ SECTIONS
         *(.rodata .rodata* .gnu.linkonce.r.*)
         *(.ARM.extab* .gnu.linkonce.armextab.*)
 
+		/* Added strings section for string constants - ER */
+		. = ALIGN(4);
+        KEEP(*(.strings .strings.*))
+
         /* Support C constructors, and C destructors in both user code
            and the C library. This also provides support for C++ code. */
         . = ALIGN(4);
