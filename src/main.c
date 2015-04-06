@@ -8,13 +8,16 @@
 #include <compiler.h>
 
 static volatile uint32_t millis = 0;
+static char volatile received = 0;
 
 // Requires .strings section in linker script, with KEEP so it isn't removed
+// Placing the .strings section in RAM will provide quicker access but use up more memory.
+// Placing the .strings section in ROM will maximize memory
 #define CPSTRCONST			char * const __attribute((used, section(".strings")))
 #define CPSTRCONSTPTR		char const *
 
-static CPSTRCONST 				uart_test = "CPHANDHELD_";
-static CPSTRCONSTPTR volatile 	uart_test_ptr;
+static CPSTRCONST uart_test = "CPHANDHELD_";
+static CPSTRCONSTPTR volatile uart_test_ptr;
 
 void init_clock(void) {
 	// startup time value = 63
@@ -96,23 +99,32 @@ void init_uart0(void) {
 	// UART: set no parity
 	UART0->UART_MR = UART_MR_PAR_NO;
 
-	// UART: start with TXRDY off
-	UART0->UART_IDR = UART_IER_TXRDY;
+	// UART: start with TXRDY off and RXRDY on
+	UART0->UART_IDR = UART_IDR_TXRDY;
+	UART0->UART_IER = UART_IER_RXRDY;
 
 	// UART: enable receiver and transmitter
-	UART0->UART_CR = UART_CR_TXEN;
+	UART0->UART_CR = UART_CR_TXEN | UART_CR_RXEN;
 }
 
 void UART0_Handler(void) {
-	UART0->UART_SR;
+	uint32_t sr =  UART0->UART_SR;
 
-	if (UART0->UART_SR & UART_SR_TXRDY) {
-		if (*uart_test_ptr) {
+	if (sr & UART_SR_TXRDY) {
+		if (received) {
+			UART0->UART_THR = received;
+			received = 0;
+		} else
+			if (*uart_test_ptr) {
 			UART0->UART_THR = *uart_test_ptr;
 			uart_test_ptr++;
 		} else {
 			UART0->UART_IDR = UART_IDR_TXRDY;
 		}
+	}
+
+	if (sr & UART_SR_RXRDY) {
+		received = UART0->UART_RHR;
 	}
 }
 
