@@ -170,17 +170,19 @@ void init_sram(void) {
 			| PIO_PC8A_NWE 		// NWE
 			| PIO_PC11A_NRD 	// NRD
 			| PIO_PC14A_NCS0	// NCS0
-			| 0xFFFD0000;			// address A0-A13 & A19  (A19?? Datasheet says this is A21 !! pg 52)
+			| 0xFFFC0000;			// address A0-A13
+//			| 0xFFFD0000;			// address A0-A13 & A19  (A19?? Datasheet says this is A21 !! pg 52)
 	PIOC->PIO_ABCDSR[0] &= ~mask;	// enable Peripheral A
 	PIOC->PIO_ABCDSR[1] &= ~mask;	// enable Peripheral A
 	PIOC->PIO_PUER = mask;			// enable pullup
 	PIOC->PIO_PDR = mask;			// disable PIO control (enable Peripheral control)
 
-	mask = 0x001C0003;			// address A14-A18
-	PIOA->PIO_ABCDSR[0] &= ~mask;	// enable Peripheral A
-	PIOA->PIO_ABCDSR[1] &= ~mask;	// enable Peripheral A
+//	mask = 0x001C0003;			// address A14-A18
+	mask = 0x009C0003;			// address A14-A19
+	PIOA->PIO_ABCDSR[0] &= ~mask;	// enable Peripheral C
+	PIOA->PIO_ABCDSR[1] |= mask;	// enable Peripheral C
 	PIOA->PIO_PUER = mask;			// enable pullup
-	PIOA->PIO_PDR = mask;			// disable PIO controll (enable Peripheral control)
+	PIOA->PIO_PDR = mask;			// disable PIO control (enable Peripheral control)
 
 	// Configure SRAM_VCC to turn on power to the chip
 	PIOC->PIO_PUDR = PIO_PUDR_P9;	// disable pullup for PC9
@@ -221,11 +223,17 @@ void init_sram(void) {
 	#define BOARD_SRAM_LENGTH         ((uint32_t)0x00100000)
 
 	char * pSram = BOARD_SRAM_BASE;
-	for (int i=0;i<0xff;i++) {
-		*(pSram + i + BOARD_SRAM_LENGTH) = i * 2;
+	for (int i=0;i<0x100000;i++) {
+		*(pSram + i) = 'A';
 	}
-
-
+	*(pSram + BOARD_SRAM_LENGTH - 4) = 'J';
+	*(pSram + BOARD_SRAM_LENGTH - 3) = 'O';
+	*(pSram + BOARD_SRAM_LENGTH - 2) = 'H';
+	*(pSram + BOARD_SRAM_LENGTH - 1) = 'N';
+	*(pSram + 0) = 'J';
+	*(pSram + 1) = 'O';
+	*(pSram + 2) = 'H';
+	*(pSram + 3) = 'N';
 
 }
 
