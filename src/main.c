@@ -31,7 +31,7 @@ int main(void) {
 	uint32_t elapsed = 0;
 	uint32_t start = 0;
 	bool result;
-	bool led_on = false;
+	bool led_on = true;
 	unsigned char c;
 
 	// Disable Watchdog .. enabled at startup by default - ~16s
@@ -44,30 +44,35 @@ int main(void) {
 	init_sram();
 //	init_cam();
 
-
 	print_menu();
 
 	while (1) {
 
 		if (uart0_readchar(&c)) {
 			start = millis;
+
 			if (c == '1') {
 				led_on = (led_on ? false : true);
 				printf("LED 1Hz is now ");
 				(led_on ? puts("ON") : puts("OFF"));
-			} else if (c == '2') {
+			}
+
+			else if (c == '2') {
 				printf("Testing SRAM...\r\n");
 				result = test_sram_01();
-			} else {
+			}
+
+			else {
 				puts("UNKNOWN COMMAND");
 				result = false;
 			}
+
 			elapsed = millis - start;
 			(result ? printf("SUCCESS") : printf("FAILED"));
 			printf(" ... elapsed: %" PRIu32 "\r\n", elapsed);
+
 			print_menu();
 		}
-
 
 		if (led_on) {
 			elapsed = millis - prev;
