@@ -7,6 +7,8 @@
 
 #include <compiler.h>
 
+#define BOARD_SRAM_BASE           ((void*)0x60000000)
+#define BOARD_SRAM_LENGTH         ((uint32_t)0x00100000)
 
 void init_sram(void) {
 	uint32_t mask = 0;
@@ -65,24 +67,50 @@ void init_sram(void) {
 	SMC->SMC_CS_NUMBER[0].SMC_MODE  = SMC_MODE_READ_MODE
 									 | SMC_MODE_WRITE_MODE;
 
+}
 
-	// TEST TEST TEST TEST
-	//
-
-	#define BOARD_SRAM_BASE           ((void*)0x60000000)
-	#define BOARD_SRAM_LENGTH         ((uint32_t)0x00100000)
-
+bool test_sram_01(void) {
 	char * pSram = BOARD_SRAM_BASE;
 	for (int i=0;i<0x100000;i++) {
 		*(pSram + i) = 'A';
 	}
-	*(pSram + BOARD_SRAM_LENGTH - 4) = 'J';
-	*(pSram + BOARD_SRAM_LENGTH - 3) = 'O';
-	*(pSram + BOARD_SRAM_LENGTH - 2) = 'H';
-	*(pSram + BOARD_SRAM_LENGTH - 1) = 'N';
-	*(pSram + 0) = 'J';
-	*(pSram + 1) = 'O';
-	*(pSram + 2) = 'H';
-	*(pSram + 3) = 'N';
 
+	// Write to the mid point
+	*(pSram + (BOARD_SRAM_LENGTH/2) - 4) = 'C';
+	*(pSram + (BOARD_SRAM_LENGTH/2) - 3) = 'P';
+	*(pSram + (BOARD_SRAM_LENGTH/2) - 2) = 'H';
+	*(pSram + (BOARD_SRAM_LENGTH/2) - 1) = 'T';
+
+	// Write to the max point
+	*(pSram + BOARD_SRAM_LENGTH - 4) = 'T';
+	*(pSram + BOARD_SRAM_LENGTH - 3) = 'H';
+	*(pSram + BOARD_SRAM_LENGTH - 2) = 'P';
+	*(pSram + BOARD_SRAM_LENGTH - 1) = 'C';
+
+	printf("test_sram_01: bytes at mid should be 'CPHT' are actually '");
+	putchar((uint8_t)*(pSram + (BOARD_SRAM_LENGTH/2) - 4));
+	putchar((uint8_t)*(pSram + (BOARD_SRAM_LENGTH/2) - 3));
+	putchar((uint8_t)*(pSram + (BOARD_SRAM_LENGTH/2) - 2));
+	putchar((uint8_t)*(pSram + (BOARD_SRAM_LENGTH/2) - 1));
+	printf("\r\n");
+	printf("test_sram_01: bytes at end should be 'THPC' are actually '");
+	putchar((uint8_t)*(pSram + BOARD_SRAM_LENGTH - 4));
+	putchar((uint8_t)*(pSram + BOARD_SRAM_LENGTH - 3));
+	putchar((uint8_t)*(pSram + BOARD_SRAM_LENGTH - 2));
+	putchar((uint8_t)*(pSram + BOARD_SRAM_LENGTH - 1));
+	printf("\r\n");
+
+	uint8_t test = 0;
+	test |= *(pSram + (BOARD_SRAM_LENGTH/2) - 4) ^ 'C';
+	test |= *(pSram + (BOARD_SRAM_LENGTH/2) - 3) ^ 'P';
+	test |= *(pSram + (BOARD_SRAM_LENGTH/2) - 2) ^ 'H';
+	test |= *(pSram + (BOARD_SRAM_LENGTH/2) - 1) ^ 'T';
+	test |= *(pSram + BOARD_SRAM_LENGTH - 4) ^ 'T';
+	test |= *(pSram + BOARD_SRAM_LENGTH - 3) ^ 'H';
+	test |= *(pSram + BOARD_SRAM_LENGTH - 2) ^ 'P';
+	test |= *(pSram + BOARD_SRAM_LENGTH - 1) ^ 'C';
+
+	printf("test_sram_01: test result is %#02x\r\n", test);
+
+	return (test == 0 ? true : false);
 }

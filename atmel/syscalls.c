@@ -136,6 +136,7 @@ extern int _getpid(void)
 	return -1;
 }
 
+
 /// @cond 0
 /**INDENT-OFF**/
 #ifdef __cplusplus
