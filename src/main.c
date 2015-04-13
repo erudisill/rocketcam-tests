@@ -17,6 +17,7 @@ bool uart0_readchar(unsigned char * data);
 void init_sram(void);
 bool test_sram_01(void);
 void init_cam(void);
+bool test_cam_twi(void);
 extern volatile uint32_t millis;
 
 void print_menu(void) {
@@ -24,6 +25,7 @@ void print_menu(void) {
 	printf("RocketCam Test Suite 1.0\r\n");
 	printf("1. Toggle LED 1Hz\r\n");
 	printf("2. Test SRAM\r\n");
+	printf("3. Test CAM TWI\r\n");
 }
 
 int main(void) {
@@ -42,7 +44,7 @@ int main(void) {
 	init_led();
 	init_uart0();
 	init_sram();
-//	init_cam();
+	init_cam();
 
 	print_menu();
 
@@ -53,17 +55,22 @@ int main(void) {
 
 			if (c == '1') {
 				led_on = (led_on ? false : true);
-				printf("LED 1Hz is now ");
-				(led_on ? puts("ON") : puts("OFF"));
+				puts("\r\nLED 1Hz is now ");
+				(led_on ? puts("ON\r\n") : puts("OFF\r\n"));
 			}
 
 			else if (c == '2') {
-				printf("Testing SRAM...\r\n");
+				printf("\r\nTesting SRAM...\r\n");
 				result = test_sram_01();
 			}
 
+			else if (c == '3') {
+				printf("\r\nTesting CAM TWI...\r\n");
+				result = test_cam_twi();
+			}
+
 			else {
-				puts("UNKNOWN COMMAND");
+				puts("\r\nUNKNOWN COMMAND\r\n");
 				result = false;
 			}
 

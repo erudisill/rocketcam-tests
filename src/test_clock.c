@@ -18,10 +18,17 @@
 #define CLOCK_STARTUP_TIME_US	14500
 #define CLOCK_MOSCXTST			(CLOCK_STARTUP_TIME_US * (32000/1000000) / 8)
 
-// PLL values for 120MHz w/ 12MHz XTAL
+// PLL A values for 120MHz w/ 12MHz XTAL
 // (12MHz * 20) / 1 = 240MHz PLL
-#define CLOCK_PLL_MUL 			(20UL)
-#define CLOCK_PLL_DIV			(1UL)
+#define CLOCK_PLLA_MUL 			(20UL)
+#define CLOCK_PLLA_DIV			(1UL)
+
+// PLL B values for 96MHz w/ 12MHz XTAL
+// (12MHz * 8) / 1 = 96MHz PLL
+// Later, 96MHz will be prescaled by 4 to create a 24MHz clock for the camera
+#define CLOCK_PLLB_MUL 			(8UL)
+#define CLOCK_PLLB_DIV			(1UL)
+
 
 // 63 = settling time in us of PLLA, from datasheet pag 1166
 #define CLOCK_PLL_COUNT			(0x3fU)
@@ -49,12 +56,20 @@ void init_clock(void) {
 	while (!(PMC->PMC_SR & PMC_SR_MOSCSELS))
 		;
 
-	//	6. Set PLL and Divider
+	//	6a. Set PLL and Divider - for MCK
 	PMC->CKGR_PLLAR = CKGR_PLLAR_ONE | CKGR_PLLAR_MULA(0);		// disable first
-	PMC->CKGR_PLLAR = CKGR_PLLAR_ONE | CKGR_PLLAR_MULA(CLOCK_PLL_MUL - 1) |
-	CKGR_PLLAR_DIVA(CLOCK_PLL_DIV) |
-	CKGR_PLLAR_PLLACOUNT(CLOCK_PLL_COUNT);
+	PMC->CKGR_PLLAR = CKGR_PLLAR_ONE | CKGR_PLLAR_MULA(CLOCK_PLLA_MUL - 1) |
+						CKGR_PLLAR_DIVA(CLOCK_PLLA_DIV) |
+						CKGR_PLLAR_PLLACOUNT(CLOCK_PLL_COUNT);
 	while (!(PMC->PMC_SR & PMC_SR_LOCKA))
+		;
+
+	//	6b. Set PLL and Divider - for Camera (PCK0)
+	PMC->CKGR_PLLBR = CKGR_PLLBR_MULB(0);		// disable first
+	PMC->CKGR_PLLBR = CKGR_PLLBR_MULB(CLOCK_PLLB_MUL - 1) |
+						CKGR_PLLBR_DIVB(CLOCK_PLLB_DIV) |
+						CKGR_PLLBR_PLLBCOUNT(CLOCK_PLL_COUNT);
+	while (!(PMC->PMC_SR & PMC_SR_LOCKB))
 		;
 
 	//  7a. Select  Master Clock and Processor Clock
