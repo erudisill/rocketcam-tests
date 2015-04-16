@@ -18,6 +18,7 @@ void init_sram(void);
 bool test_sram_01(void);
 void init_cam(void);
 bool test_cam_twi(void);
+bool test_cam_capture(void);
 extern volatile uint32_t millis;
 
 void print_menu(void) {
@@ -26,6 +27,7 @@ void print_menu(void) {
 	printf("1. Toggle LED 1Hz\r\n");
 	printf("2. Test SRAM\r\n");
 	printf("3. Test CAM TWI\r\n");
+	printf("4. Test CAM CAP\r\n");
 }
 
 int main(void) {
@@ -67,6 +69,11 @@ int main(void) {
 			else if (c == '3') {
 				printf("\r\nTesting CAM TWI...\r\n");
 				result = test_cam_twi();
+			}
+
+			else if (c == '4') {
+				printf("\r\nTesting CAM CAP...\r\n");
+				result = test_cam_capture();
 			}
 
 			else {
