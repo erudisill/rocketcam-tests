@@ -17,11 +17,93 @@
 #define	OV7740_PIDL               0x0b
 
 extern volatile uint32_t millis;
+extern int uart0_get_tx_count(void);
 
 extern const ov_reg OV7740_QVGA_YUV422[];
 
 volatile bool vsync_flag = false;
 uint32_t volatile pc_count;
+
+void Wait(uint32_t ms) {
+	uint32_t start;
+	start = millis;
+	while ((millis - start) < ms)
+		;
+}
+
+static inline uint8_t _clip( int32_t i )
+{
+    if ( i > 255 )
+    {
+        return 255 ;
+    }
+
+    if ( i < 0 )
+    {
+        return 0 ;
+    }
+
+    return (uint8_t)i ;
+}
+
+static void dump_buffer(void) {
+	uint32_t dwCursor;
+	int32_t C;
+	int32_t D;
+	int32_t E;
+	int32_t dw1_1;
+	int32_t dw1_2;
+	int32_t dw1_3;
+	uint8_t* pucData;
+	uint8_t tempR;
+	uint8_t tempG;
+	uint8_t tempB;
+	uint8_t step;
+
+	pucData = (uint8_t *) BOARD_SRAM_BASE;
+
+	printf("* START BUFFER *\r\n");
+	while (uart0_get_tx_count() > 0);
+
+	dwCursor = IMAGE_WIDTH * IMAGE_HEIGHT;
+	step = 0;
+
+	for (; dwCursor != 0; dwCursor -= 2, pucData += 4) {
+
+		if (step == 0) {
+			printf("\r\n%06X: ", dwCursor);
+			while (uart0_get_tx_count() > 0);
+			step = 8;
+		}
+
+		C = pucData[0]; // Y1
+		C -= 16;
+		D = pucData[3]; // U
+		D -= 128;
+		E = pucData[1]; // V
+		E -= 128;
+
+		dw1_1 = 516 * D + 128;
+		dw1_2 = -100 * D - 208 * E + 128;
+		dw1_3 = 409 * E + 128;
+
+		tempB = _clip((298 * C + dw1_1) >> 8);
+		tempG = _clip((298 * C + dw1_2) >> 8);
+		tempR = _clip((298 * C + dw1_3) >> 8);
+		printf("%02X,%02X,%02X ", tempB, tempG, tempR);
+
+		C = pucData[2]; // Y2
+		C -= 16;
+		tempB = _clip((298 * C + dw1_1) >> 8);
+		tempG = _clip((298 * C + dw1_2) >> 8);
+		tempR = _clip((298 * C + dw1_3) >> 8);
+		printf("%02X,%02X,%02X ", tempB, tempG, tempR);
+
+		step--;
+	}
+
+	printf("* END BUFFER *\r\n");
+}
 
 static void _SetDefaultMaster(void) {
 	Matrix *pMatrix = MATRIX;
@@ -39,9 +121,6 @@ static void _SetDefaultMaster(void) {
 	((2 << 16) & MATRIX_SCFG_DEFMSTR_TYPE_Msk); /* Fixed Default Master */
 }
 
-////////
-// HACK: Ripped from pseudo-ASF files in WPIR demo project.  Should use a proper driver!!
-////////
 #define TWITIMEOUTMAX 50000
 uint8_t TWI_ByteSent(Twi *pTwi) {
 	return ((pTwi->TWI_SR & TWI_SR_TXRDY) == TWI_SR_TXRDY);
@@ -205,12 +284,6 @@ static void init_twi(void) {
 			0) | TWI_CWGR_CHDIV(146) | TWI_CWGR_CLDIV(146);		// 400KHz
 }
 
-void Wait(uint32_t ms) {
-	uint32_t start;
-	start = millis;
-	while ((millis - start) < ms)
-		;
-}
 
 /**
  *  Initialize a list of OV registers.
@@ -262,19 +335,14 @@ extern void PIOA_Handler(void) {
 }
 
 static void init_vsync(void) {
-//	PIO_Configure(&pinVSYNC,1);
-//  PIO_ConfigureIt(&pinVSYNC, _Vsync_Handler);
-
 	PIOA->PIO_IDR = PIO_IER_P15;	// disable interrupt during configuration
 	PIOA->PIO_PUER = PIO_PUER_P15;		// enable pullup for PA15
 	PIOA->PIO_ODR = PIO_OER_P15;		// enable input for PA15
 	PIOA->PIO_AIMER = PIO_AIMER_P15;	// enable additional interrupt modes
 	PIOA->PIO_ESR = PIO_ESR_P15;		// edge event detection
 	PIOA->PIO_REHLSR = PIO_REHLSR_P15;	// rising edge event detection
-//	PIOA->PIO_IER = PIO_IER_P15;		// enable interrupt
 	PIOA->PIO_PER = PIO_PER_P15;		// enable PIO control for PA15
 
-	//NVIC_EnableIRQ(PIOA_IRQn);
 	NVIC_DisableIRQ(PIOA_IRQn);
 	NVIC_ClearPendingIRQ(PIOA_IRQn);
 	NVIC_SetPriority(PIOA_IRQn, 0);
@@ -314,12 +382,6 @@ void init_cam(void) {
 	PIOC->PIO_OER = PIO_OER_P10;		// enable output on PC10
 	PIOC->PIO_PER = PIO_PER_P10;		// enable PIO control for PC10
 
-//	// raise reset line to cam sensor
-//	PIOC->PIO_PUDR = PIO_PUDR_P15;		// disable pullup for PC15
-//	PIOC->PIO_SODR = PIO_CODR_P15;		// set output data on PC15 to 1
-//	PIOC->PIO_OER = PIO_OER_P15;		// enable output on PC15
-//	PIOC->PIO_PER = PIO_PER_P15;		// enable PIO control for PC15
-
 	// configure programmable clock - PCK0 on PB13, PERIPH B
 	unsigned int abcdsr;
 	unsigned int mask;
@@ -338,10 +400,6 @@ void init_cam(void) {
 	PMC->PMC_SCER = PMC_SCER_PCK0;
 	while (!(PMC->PMC_SCSR & PMC_SCSR_PCK0))
 		;
-
-	// wait for 1ms at least
-//	uint32_t start_millis = millis;
-//	while ((millis - start_millis) < 5);
 
 	// configure twi
 	init_twi();
@@ -403,6 +461,9 @@ bool test_cam_capture(void) {
 
 	// turn off parallel capture
 	PIO_Capture_Switch(PIOA, false);
+
+	// Dump buffer to UART
+	dump_buffer();
 }
 
 //bool test_cam_capture(void) {
@@ -451,3 +512,4 @@ bool test_cam_twi(void) {
 
 	return true;
 }
+

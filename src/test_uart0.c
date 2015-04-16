@@ -12,14 +12,16 @@ typedef struct {
 	unsigned char buffer[BUFFER_SIZE];
 	volatile unsigned int head;
 	volatile unsigned int tail;
+	volatile unsigned int count;
 } ring_buffer;
-static ring_buffer tx_buf = { { 0 }, 0, 0 };
-static ring_buffer rx_buf = { { 0 }, 0, 0 };
+static ring_buffer tx_buf = { { 0 }, 0, 0, 0 };
+static ring_buffer rx_buf = { { 0 }, 0, 0, 0 };
 bool uart0_putc(ring_buffer * buf, unsigned char data) {
 	unsigned int next = (unsigned int) (buf->head + 1) % BUFFER_SIZE;
 	if (next != buf->tail) {
 		buf->buffer[buf->head] = data;
 		buf->head = next;
+		buf->count++;
 		// turn on TXRDY interrupt if not already on
 		if ((UART0->UART_IMR & UART_IMR_TXRDY) == 0) {
 			UART0->UART_IER = UART_IER_TXRDY;
@@ -31,15 +33,20 @@ bool uart0_putc(ring_buffer * buf, unsigned char data) {
 }
 bool uart0_getc(ring_buffer * buf, unsigned char * data) {
 	if (buf->head == buf->tail) {
+		buf->count = 0;
 		return false;
 	} else {
 		*data = buf->buffer[buf->tail];
 		buf->tail = (unsigned int) (buf->tail + 1) % BUFFER_SIZE;
+		buf->count--;
 		return true;
 	}
 }
 bool uart0_readchar(unsigned char * data) {
 	return uart0_getc(&rx_buf, data);
+}
+int uart0_get_tx_count(void) {
+	return tx_buf.count;
 }
 
 void init_uart0(void) {
