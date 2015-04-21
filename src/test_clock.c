@@ -7,6 +7,9 @@
 
 #include <compiler.h>
 
+//#define CP_CLOCK
+
+#ifdef CP_CLOCK
 
 // startup time value = 63
 // 15625us .. not sure where the number came from other than the max startup time
@@ -84,3 +87,99 @@ void init_clock(void) {
 		;
 }
 
+#else
+
+#define BOARD_MCK 120000000
+
+/* Clock settings at 48MHz */
+#if (BOARD_MCK == 48000000)
+#define	NUMBER_WS	2
+#define BOARD_OSCOUNT   (CKGR_MOR_MOSCXTST(0x8))
+#define BOARD_PLLBR     (CKGR_PLLBR_MULB(3) \
+                       | CKGR_PLLBR_PLLBCOUNT(0x1) \
+                       | CKGR_PLLBR_DIVB(1))
+#define BOARD_PLLAR     (CKGR_PLLAR_STUCKTO1 | CKGR_PLLAR_MULA(7) \
+                       | CKGR_PLLAR_PLLACOUNT(0x1) \
+                       | CKGR_PLLAR_DIVA(1))
+#define BOARD_MCKR      (PMC_MCKR_PRES_CLK | PMC_MCKR_CSS_PLLB_CLK)
+/* Clock settings at 64MHz */
+#elif (BOARD_MCK == 64000000)
+#define	NUMBER_WS	3
+#define BOARD_OSCOUNT   (CKGR_MOR_MOSCXTST(0x8))
+#define BOARD_PLLBR     (CKGR_PLLBR_MULB(31) \
+                       | CKGR_PLLBR_PLLBCOUNT(0x1) \
+                       | CKGR_PLLBR_DIVB(3))
+#define BOARD_PLLAR     (CKGR_PLLAR_STUCKTO1 | CKGR_PLLAR_MULA(7) \
+                       | CKGR_PLLAR_PLLACOUNT(0x1) \
+                       | CKGR_PLLAR_DIVA(1))
+#define BOARD_MCKR      (PMC_MCKR_PRES_CLK_2 | PMC_MCKR_CSS_PLLB_CLK)
+/* Clock settings at 120MHz */
+#elif (BOARD_MCK == 120000000)
+#define	NUMBER_WS	5
+#define BOARD_OSCOUNT   (CKGR_MOR_MOSCXTST(0x8))
+#define BOARD_PLLBR     (CKGR_PLLBR_MULB(29) \
+                       | CKGR_PLLBR_PLLBCOUNT(0x1) \
+                       | CKGR_PLLBR_DIVB(3))
+#define BOARD_PLLAR     (CKGR_PLLAR_ONE | CKGR_PLLAR_MULA(7) \
+                       | CKGR_PLLAR_PLLACOUNT(0x1) \
+                       | CKGR_PLLAR_DIVA(1))
+#define BOARD_MCKR      (PMC_MCKR_PRES_CLK_1 | PMC_MCKR_CSS_PLLB_CLK)
+#else
+    #error "No settings for current BOARD_MCK."
+#endif
+
+/* Define clock timeout */
+#define CLOCK_TIMEOUT    0xFFFFFFFF
+
+/*----------------------------------------------------------------------------
+ *        Exported functions
+ *----------------------------------------------------------------------------*/
+
+/**
+ * \brief Performs the low-level initialization of the chip.
+ * This includes EFC and master clock configuration.
+ * It also enable a low level on the pin NRST triggers a user reset.
+ */
+void init_clock( void )
+{
+    uint32_t timeout = 0;
+
+    /* Set 5 FWS for Embedded Flash Access
+    and CLOE: Code Loops Optimization Enable
+    128-bit flash access */
+    EFC0->EEFC_FMR = (1<<26) | EEFC_FMR_FWS(NUMBER_WS);
+
+    /* Initialize main oscillator */
+    if ( !(PMC->CKGR_MOR & CKGR_MOR_MOSCSEL) )
+    {
+        PMC->CKGR_MOR = CKGR_MOR_KEY_PASSWD | BOARD_OSCOUNT | CKGR_MOR_MOSCRCEN | CKGR_MOR_MOSCXTEN;
+        timeout = 0;
+        while (!(PMC->PMC_SR & PMC_SR_MOSCXTS) && (timeout++ < CLOCK_TIMEOUT));
+    }
+
+    /* Switch to 3-20MHz Xtal oscillator */
+    PMC->CKGR_MOR = CKGR_MOR_KEY_PASSWD | BOARD_OSCOUNT | CKGR_MOR_MOSCRCEN | CKGR_MOR_MOSCXTEN | CKGR_MOR_MOSCSEL;
+    timeout = 0;
+    while (!(PMC->PMC_SR & PMC_SR_MOSCSELS) && (timeout++ < CLOCK_TIMEOUT));
+    PMC->PMC_MCKR = (PMC->PMC_MCKR & ~(uint32_t)PMC_MCKR_CSS_Msk) | PMC_MCKR_CSS_MAIN_CLK;
+    for ( timeout = 0; !(PMC->PMC_SR & PMC_SR_MCKRDY) && (timeout++ < CLOCK_TIMEOUT) ; );
+
+    /* Initialize PLLB for CPU and Bus clock */
+    PMC->CKGR_PLLBR = BOARD_PLLBR;
+    timeout = 0;
+    while (!(PMC->PMC_SR & PMC_SR_LOCKB) && (timeout++ < CLOCK_TIMEOUT));
+
+    /* Switch to main clock */
+    PMC->PMC_MCKR = (BOARD_MCKR & ~PMC_MCKR_CSS_Msk) | PMC_MCKR_CSS_MAIN_CLK;
+    for ( timeout = 0; !(PMC->PMC_SR & PMC_SR_MCKRDY) && (timeout++ < CLOCK_TIMEOUT) ; );
+
+    PMC->PMC_MCKR = BOARD_MCKR ;
+    for ( timeout = 0; !(PMC->PMC_SR & PMC_SR_MCKRDY) && (timeout++ < CLOCK_TIMEOUT) ; );
+
+    /* Initialize PLLA for image sensor */
+    PMC->CKGR_PLLAR = BOARD_PLLAR;
+    timeout = 0;
+    while (!(PMC->PMC_SR & PMC_SR_LOCKA) && (timeout++ < CLOCK_TIMEOUT));
+}
+
+#endif

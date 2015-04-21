@@ -31,22 +31,20 @@ void Wait(uint32_t ms) {
 		;
 }
 
-static inline uint8_t _clip( int32_t i )
-{
-    if ( i > 255 )
-    {
-        return 255 ;
-    }
+static inline uint8_t _clip(int32_t i) {
+	if (i > 255) {
+		return 255;
+	}
 
-    if ( i < 0 )
-    {
-        return 0 ;
-    }
+	if (i < 0) {
+		return 0;
+	}
 
-    return (uint8_t)i ;
+	return (uint8_t) i;
 }
 
 static void dump_buffer(void) {
+
 	uint32_t dwCursor;
 	int32_t C;
 	int32_t D;
@@ -58,23 +56,16 @@ static void dump_buffer(void) {
 	uint8_t tempR;
 	uint8_t tempG;
 	uint8_t tempB;
-	uint8_t step;
 
 	pucData = (uint8_t *) BOARD_SRAM_BASE;
 
 	printf("* START BUFFER *\r\n");
-	while (uart0_get_tx_count() > 0);
+	while (uart0_get_tx_count() > 0)
+		;
 
-	dwCursor = IMAGE_WIDTH * IMAGE_HEIGHT;
-	step = 0;
+	for (dwCursor = 0; dwCursor < (320 * 240); dwCursor += 2, pucData += 4) {
 
-	for (; dwCursor != 0; dwCursor -= 2, pucData += 4) {
-
-		if (step == 0) {
-			printf("\r\n%06X: ", dwCursor);
-			while (uart0_get_tx_count() > 0);
-			step = 8;
-		}
+		printf("%06X: ", dwCursor);
 
 		C = pucData[0]; // Y1
 		C -= 16;
@@ -97,9 +88,10 @@ static void dump_buffer(void) {
 		tempB = _clip((298 * C + dw1_1) >> 8);
 		tempG = _clip((298 * C + dw1_2) >> 8);
 		tempR = _clip((298 * C + dw1_3) >> 8);
-		printf("%02X,%02X,%02X ", tempB, tempG, tempR);
+		printf("%02X,%02X,%02X\r\n", tempB, tempG, tempR);
 
-		step--;
+		while (uart0_get_tx_count() > 0)
+			;
 	}
 
 	printf("* END BUFFER *\r\n");
@@ -252,8 +244,10 @@ static void init_twi(void) {
 	// The end result should equal 1/100000 or 1/400000 accordingly.
 
 	// configure TWI pins (Peripheral A)
-	PIOA->PIO_ABCDSR[0] &= ~(1 << ID_TWI0);
-	PIOA->PIO_ABCDSR[1] &= ~(1 << ID_TWI0);
+	PIOA->PIO_ABCDSR[0] &= ~((uint32_t)PIO_PA4A_TWCK0);
+	PIOA->PIO_ABCDSR[1] &= ~((uint32_t)PIO_PA4A_TWCK0);
+	PIOA->PIO_ABCDSR[0] &= ~((uint32_t)PIO_PA3A_TWD0);
+	PIOA->PIO_ABCDSR[1] &= ~((uint32_t)PIO_PA3A_TWD0);
 	PIOA->PIO_PDR = PIO_PA4A_TWCK0 | PIO_PA3A_TWD0;
 
 	// enable TWI peripheral clock
@@ -283,7 +277,6 @@ static void init_twi(void) {
 	TWI0->TWI_CWGR = TWI_CWGR_CKDIV(
 			0) | TWI_CWGR_CHDIV(146) | TWI_CWGR_CLDIV(146);		// 400KHz
 }
-
 
 /**
  *  Initialize a list of OV registers.
@@ -425,7 +418,7 @@ uint8_t PIO_CaptureToBuffer(Pio *pio, uint8_t *buf, uint32_t size) {
 
 		pio->PIO_RNPR = (uint32_t) buf;
 		pio->PIO_RNCR = size;
-		return 1;
+		return 2;
 	} else {
 		return 0;
 	}
@@ -437,63 +430,97 @@ bool PIO_Capture_BUFF(Pio *pio) {
 																		false;
 }
 
+#define CAPTURE_WITH_PDC
+
+#ifdef CAPTURE_WITH_PDC
+
 bool test_cam_capture(void) {
 
 	uint8_t *buf;
 
 	buf = (uint8_t *) BOARD_SRAM_BASE;
 
+	for (int i = 0; i < 5; i++) {
+
+		// sync with vsync
+		vsync_flag = false;
+		PIOA->PIO_ISR;
+		PIOA->PIO_IER = PIO_IER_P15;
+		while (!vsync_flag)
+			;
+		PIOA->PIO_IDR = PIO_IDR_P15;
+
+		// turn on parallel capture
+		PIO_Capture_Switch(PIOA, true);
+
+		// capture to buffer
+		int x = PIO_CaptureToBuffer(PIOA, buf,
+				(IMAGE_HEIGHT * IMAGE_WIDTH) >> 2);
+		while (!PIO_Capture_BUFF(PIOA))
+			;
+
+		// turn off parallel capture
+		PIO_Capture_Switch(PIOA, false);
+
+		printf("PIO_CaptureToBuffer returned %d\r\n", x);
+
+	}
+
+	// Dump buffer to UART
+	//dump_buffer();
+}
+
+#else
+
+uint32_t byte_reverse_32(uint32_t num) {
+	static union bytes {
+		uint8_t b[4];
+		uint32_t n;
+	}bytes;
+	bytes.n = num;
+
+	uint32_t ret = 0;
+	ret |= bytes.b[0] << 24;
+	ret |= bytes.b[1] << 16;
+	ret |= bytes.b[2] << 8;
+	ret |= bytes.b[3];
+
+	return ret;
+}
+
+bool test_cam_capture(void) {
+
+	uint32_t pcsr = PIOA->PIO_PCISR;
+	uint32_t *buf;
+
+	buf = (uint32_t *) BOARD_SRAM_BASE;
+
 	// sync with vsync
 	vsync_flag = false;
 	PIOA->PIO_ISR;
 	PIOA->PIO_IER = PIO_IER_P15;
 	while (!vsync_flag)
-		;
+	;
 	PIOA->PIO_IDR = PIO_IDR_P15;
 
-	// turn on parallel capture
-	PIO_Capture_Switch(PIOA, true);
-
-	// capture to buffer
-	PIO_CaptureToBuffer(PIOA, buf, (IMAGE_HEIGHT * IMAGE_WIDTH) >> 2);
-	while (!PIO_Capture_BUFF(PIOA))
-		;
-
-	// turn off parallel capture
-	PIO_Capture_Switch(PIOA, false);
+	pc_count = 0;
+	PIOA->PIO_PCMR |= PIO_PCMR_PCEN;
+	pcsr = PIOA->PIO_PCISR;
+	while (pc_count < (IMAGE_HEIGHT * IMAGE_WIDTH) >> 2) {
+		pcsr = PIOA->PIO_PCISR;
+		if ((pcsr & PIO_PCISR_DRDY)) {
+			buf[pc_count] = byte_reverse_32(PIOA->PIO_PCRHR);
+			pc_count++;
+		}
+	}
+	PIOA->PIO_PCMR &= (~(uint32_t) PIO_PCMR_PCEN);
 
 	// Dump buffer to UART
 	dump_buffer();
+
 }
 
-//bool test_cam_capture(void) {
-//
-//	uint32_t pcsr = PIOA->PIO_PCISR;
-//	uint8_t *buf;
-//
-//	buf = (uint8_t *) BOARD_SRAM_BASE;
-//
-//	// sync with vsync
-//	vsync_flag = false;
-//	PIOA->PIO_ISR;
-//	PIOA->PIO_IER = PIO_IER_P15;
-//	while (!vsync_flag)
-//		;
-//	PIOA->PIO_IDR = PIO_IDR_P15;
-//
-//	// Capture 100 bytes
-//	pc_count = 100;
-//	PIOA->PIO_PCMR |= PIO_PCMR_PCEN;
-//	pcsr = PIOA->PIO_PCISR;
-//	while (pc_count > 0) {
-//		pcsr = PIOA->PIO_PCISR;
-//		if ((pcsr & PIO_PCISR_DRDY)) {
-//			buf[100 - pc_count] = PIOA->PIO_PCRHR;
-//			pc_count--;
-//		}
-//	}
-//	PIOA->PIO_PCMR &= (~(uint32_t) PIO_PCMR_PCEN);
-//}
+#endif
 
 bool test_cam_twi(void) {
 	// dwStatus = TWID_Read( pTwid, OV_CAPTOR_ADDRESS, ucReg, 1, pucVal, 1, 0 ) ;
